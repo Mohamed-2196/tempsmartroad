@@ -1,0 +1,9 @@
+[build]
+rustflags = [
+    "-L", "native=C:\\SDL2\\SDL2-2.32.4\\lib\\x64",
+    "-L", "native=C:\\SDL2\\SDL2_image\\lib\\x64",
+    "-L", "native=C:\\SDL2\\SDL2_ttf\\lib\\x64"
+]
+
+[env]
+SDL2_DIR = "C:\\SDL2\\SDL2-2.32.4"
