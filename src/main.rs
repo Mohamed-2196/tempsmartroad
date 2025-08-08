@@ -301,8 +301,8 @@ impl Game {
 
         // Draw cars with rotation
         for car in &self.cars {
-            let car_width = 46;
-            let car_height = 90;
+            let car_width = 32;  // Reduced from 46
+            let car_height = 60; // Reduced from 90
             let dst_rect = sdl2::rect::Rect::new(
                 (car.x - car_width as f32 / 2.0) as i32,
                 (car.y - car_height as f32 / 2.0) as i32,
@@ -704,7 +704,7 @@ impl Game {
                 }
             }
             Direction::South => {
-                if car.y > 355.0 {
+                if car.y > 315.0 {
                     let mut counter = 0;
                     let mut counter_left = 0;
                     for cars_list in in_intersection.values() {
