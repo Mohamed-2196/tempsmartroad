@@ -774,7 +774,7 @@ impl Game {
                     }
                     if car.y > 307.0 {
                         if !car.rotated {
-                            car.rotation = -PI / 2.0;
+                            car.rotation = PI / 2.0;
                             car.rotated = true;
                         }
                     }
@@ -819,7 +819,7 @@ impl Game {
                     }
                     if car.y < 388.0 {
                         if !car.rotated {
-                            car.rotation = PI / 2.0;
+                            car.rotation = -PI / 2.0;
                             car.rotated = true;
                         }
                     }
