@@ -8,7 +8,7 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 use sdl2::ttf::Font;
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::f32::consts::PI;
 use fastrand;
 
@@ -23,6 +23,8 @@ pub struct Game {
     pub priority_map: HashMap<(usize, usize), usize>,
     pub priority_ref: HashMap<(usize, usize), usize>, //PEAK LOGIC HONESTLY
     pub in_intersection: HashMap<CollisionType, Vec<usize>>,
+    pub last_spawn_time: Instant,
+    pub spawn_cooldown: Duration,
 }
 
 impl Game {
@@ -42,16 +44,19 @@ impl Game {
         spawn_coords.insert((Route::Left, Direction::East), (0.0, 315.0));
         spawn_coords.insert((Route::Left, Direction::South), (480.0, 682.0));
         
+        let now = Instant::now();
         Game {
             app_state: AppState::Running,
             stats: Stats::default(),
-            start_time: Instant::now(),
+            start_time: now,
             cars: Vec::new(),
             next_car_id: 1,
             spawn_coords,
             priority_map: HashMap::new(),
             priority_ref: HashMap::new(),
             in_intersection: HashMap::new(),
+            last_spawn_time: now,
+            spawn_cooldown: Duration::from_millis(0.8), // 0.8 second cooldown between spawns
         }
     }
 
@@ -181,6 +186,14 @@ impl Game {
     }
     
     fn handle_car_spawn_input(&mut self, keycode: Keycode) {
+        // Check if enough time has passed since last spawn
+        let now = Instant::now();
+        if now.duration_since(self.last_spawn_time) < self.spawn_cooldown {
+            println!("Spawn on cooldown, please wait {:.1} more seconds", 
+                (self.spawn_cooldown - now.duration_since(self.last_spawn_time)).as_secs_f32());
+            return;
+        }
+        
         let direction = match keycode {
             Keycode::Up => Some(Direction::North),
             Keycode::Down => Some(Direction::South),
@@ -287,6 +300,7 @@ impl Game {
                     self.cars.push(car);
                     self.next_car_id += 1;
                     self.stats.max_number_cars += 1;
+                    self.last_spawn_time = now; // Update last spawn time
                     
                     println!("Spawned car {} at ({}, {})", self.next_car_id - 1, x, y);
                 } else {
