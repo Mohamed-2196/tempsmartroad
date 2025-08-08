@@ -2,7 +2,7 @@ use sdl2::event::Event;
 use sdl2::image::LoadTexture;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
-use sdl2::render::{Canvas, Texture, TextureCreator};
+use sdl2::render::{Canvas, Texture, TextureCreator, BlendMode};
 use sdl2::video::{Window, WindowContext};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -291,39 +291,72 @@ impl Game {
     }
 
     fn render_game(&self, canvas: &mut Canvas<Window>, textures: &GameTextures) -> Result<(), String> {
-        // Clear with black background
+        // Create a render target texture for off-screen rendering
+        let texture_creator = canvas.texture_creator();
+        let mut target_texture = texture_creator.create_texture_target(
+            canvas.default_pixel_format(),
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT
+        ).map_err(|e| e.to_string())?;
+        
+        // Set up the target texture for rendering
+        target_texture.set_blend_mode(BlendMode::Blend);
+        
+        // Render the entire scene to the off-screen texture
+        canvas.with_texture_canvas(&mut target_texture, |texture_canvas| {
+            // Clear with black background
+            texture_canvas.set_draw_color(Color::RGB(0, 0, 0));
+            texture_canvas.clear();
+
+            // Draw intersection background
+            let dst_rect = sdl2::rect::Rect::new(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+            if let Err(e) = texture_canvas.copy(&textures.background, None, Some(dst_rect)) {
+                println!("Background copy error: {}", e);
+            }
+
+            // Draw cars with rotation
+            for car in &self.cars {
+                let car_width = 32;  // Reduced from 46
+                let car_height = 60; // Reduced from 90
+                let dst_rect = sdl2::rect::Rect::new(
+                    (car.x - car_width as f32 / 2.0) as i32,
+                    (car.y - car_height as f32 / 2.0) as i32,
+                    car_width,
+                    car_height,
+                );
+                
+                // Convert rotation from radians to degrees for SDL2
+                let angle_degrees = car.rotation * 180.0 / PI;
+                
+                // Draw with rotation
+                if let Err(e) = texture_canvas.copy_ex(
+                    &textures.car,
+                    None,
+                    Some(dst_rect),
+                    angle_degrees as f64,
+                    None,
+                    false,
+                    false,
+                ) {
+                    println!("Car copy error: {}", e);
+                }
+            }
+        }).map_err(|e| e.to_string())?;
+        
+        // Clear the main canvas
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
-
-        // Draw intersection background
-        let dst_rect = sdl2::rect::Rect::new(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-        canvas.copy(&textures.background, None, Some(dst_rect))?;
-
-        // Draw cars with rotation
-        for car in &self.cars {
-            let car_width = 32;  // Reduced from 46
-            let car_height = 60; // Reduced from 90
-            let dst_rect = sdl2::rect::Rect::new(
-                (car.x - car_width as f32 / 2.0) as i32,
-                (car.y - car_height as f32 / 2.0) as i32,
-                car_width,
-                car_height,
-            );
-            
-            // Convert rotation from radians to degrees for SDL2
-            let angle_degrees = car.rotation * 180.0 / PI;
-            
-            // Draw with rotation
-            canvas.copy_ex(
-                &textures.car,
-                None,
-                Some(dst_rect),
-                angle_degrees as f64,
-                None,
-                false,
-                false,
-            )?;
-        }
+        
+        // Copy the off-screen texture to the main canvas with horizontal mirroring
+        canvas.copy_ex(
+            &target_texture,
+            None,
+            None,
+            0.0,
+            None,
+            false,
+            true,
+        )?;
 
         canvas.present();
         Ok(())
