@@ -4,6 +4,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::render::{Canvas, Texture, TextureCreator, BlendMode};
 use sdl2::video::{Window, WindowContext};
+use sdl2::ttf::{Font, Sdl2TtfContext};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use fastrand;
@@ -232,6 +233,10 @@ impl Game {
                             car.max_speed = car.max_speed.max(car.speed);
                             car.min_speed = car.min_speed.min(car.speed);
                             
+                            // Update global speed stats
+                            self.stats.max_velocity = self.stats.max_velocity.max(car.speed);
+                            self.stats.min_velocity = 0.0; // Always 0 since cars stop
+                            
                             // Move car based on route
                             match car.route {
                                 Route::Straight => Self::move_straight(car, delta_time, &mut self.in_intersection),
@@ -277,13 +282,13 @@ impl Game {
         }
     }
 
-    pub fn render(&self, canvas: &mut Canvas<Window>, textures: &GameTextures) -> Result<(), String> {
+    pub fn render(&self, canvas: &mut Canvas<Window>, textures: &GameTextures, font: &Font) -> Result<(), String> {
         match self.app_state {
             AppState::Running => {
                 self.render_game(canvas, textures)?;
             }
             AppState::StatsDisplay => {
-                self.render_stats(canvas)?;
+                self.render_stats(canvas, font)?;
             }
             _ => {}
         }
@@ -362,14 +367,68 @@ impl Game {
         Ok(())
     }
 
-    fn render_stats(&self, canvas: &mut Canvas<Window>) -> Result<(), String> {
+    fn render_stats(&self, canvas: &mut Canvas<Window>, font: &Font) -> Result<(), String> {
         // Clear with black background
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
 
-        // TODO: Implement stats display with text rendering
-        // For now, just show black screen with ESC instruction
+        let texture_creator = canvas.texture_creator();
         
+        // Title
+        let title_surface = font.render("Simulation Statistics")
+            .blended(Color::WHITE)
+            .map_err(|e| e.to_string())?;
+        let title_texture = texture_creator.create_texture_from_surface(&title_surface)
+            .map_err(|e| e.to_string())?;
+        let title_rect = sdl2::rect::Rect::new(300, 50, title_surface.width(), title_surface.height());
+        canvas.copy(&title_texture, None, Some(title_rect))?;
+
+        // Stats text
+        let min_travel_time = if self.stats.min_time.as_secs_f32() == 1000.0 {
+            0.0
+        } else {
+            self.stats.min_time.as_secs_f32()
+        };
+        
+        let stats_lines = vec![
+            format!("Total Cars: {}", self.stats.max_number_cars),
+            format!("Maximum Speed: {:.2} units/s", self.stats.max_velocity),
+            format!("Minimum Speed: {:.2} units/s", self.stats.min_velocity),
+            format!("Maximum Travel Time: {:.2} seconds", self.stats.max_time.as_secs_f32()),
+            format!("Minimum Travel Time: {:.2} seconds", min_travel_time),
+            format!("Close Calls: {}", self.stats.close_call),
+        ];
+
+        // Render each stat line
+        for (i, line) in stats_lines.iter().enumerate() {
+            let surface = font.render(line)
+                .blended(Color::WHITE)
+                .map_err(|e| e.to_string())?;
+            let texture = texture_creator.create_texture_from_surface(&surface)
+                .map_err(|e| e.to_string())?;
+            let rect = sdl2::rect::Rect::new(
+                200, 
+                150 + (i as i32) * 50, 
+                surface.width(), 
+                surface.height()
+            );
+            canvas.copy(&texture, None, Some(rect))?;
+        }
+
+        // Exit instruction
+        let exit_surface = font.render("Press ESC again to exit")
+            .blended(Color::WHITE)
+            .map_err(|e| e.to_string())?;
+        let exit_texture = texture_creator.create_texture_from_surface(&exit_surface)
+            .map_err(|e| e.to_string())?;
+        let exit_rect = sdl2::rect::Rect::new(
+            350, 
+            550, 
+            exit_surface.width(), 
+            exit_surface.height()
+        );
+        canvas.copy(&exit_texture, None, Some(exit_rect))?;
+
         canvas.present();
         Ok(())
     }
@@ -1136,6 +1195,10 @@ pub struct GameTextures<'a> {
     pub car: Texture<'a>,
 }
 
+pub struct GameFont<'a> {
+    pub font: Font<'a, 'a>,
+}
+
 impl<'a> GameTextures<'a> {
     pub fn load(texture_creator: &'a TextureCreator<WindowContext>) -> Result<Self, String> {
         let background = texture_creator.load_texture("assets/map.png")?;
@@ -1153,6 +1216,15 @@ fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let _image_context = sdl2::image::init(sdl2::image::InitFlag::PNG | sdl2::image::InitFlag::JPG)?;
+    
+    // Initialize TTF
+    let ttf_context = sdl2::ttf::init().map_err(|e| e.to_string())?;
+    
+    // Load font (using a system font - you can replace this path)
+    let font = ttf_context.load_font("C:/Windows/Fonts/arial.ttf", 24)
+        .or_else(|_| ttf_context.load_font("/System/Library/Fonts/Arial.ttf", 24))
+        .or_else(|_| ttf_context.load_font("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24))
+        .map_err(|e| format!("Could not load font: {}", e))?;
 
     // Create window
     let window = video_subsystem
@@ -1191,7 +1263,7 @@ fn main() -> Result<(), String> {
         game.update(delta_time);
 
         // Render
-        game.render(&mut canvas, &textures)?;
+        game.render(&mut canvas, &textures, &font)?;
 
         // Cap frame rate to ~60 FPS
         std::thread::sleep(Duration::from_millis(16));
